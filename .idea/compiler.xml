@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile name="processed" enabled="true">
+        <outputRelativeToContentRoot value="true" />
+        <module name="example project" />
+        <module name="example non working project" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="initialize-subclass-tester" target="1.8" />
+    </bytecodeTargetLevel>
+  </component>
+</project>
