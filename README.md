@@ -1,2 +1,2 @@
 # README
- repo used as template and storing my packages
+ A repo that aims to simulate inherited static initialize block. Developed to be used in MC modding.
