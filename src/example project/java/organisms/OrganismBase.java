@@ -9,5 +9,6 @@ public abstract class OrganismBase {
     @CollectSubclass.Initializer
     public static void initialize(Class<? extends OrganismBase> clazz) {
         INSTANCES.put(clazz);
+        System.out.println("initialize() called");
     }
 }

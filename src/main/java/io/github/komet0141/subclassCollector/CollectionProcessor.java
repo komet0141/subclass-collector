@@ -88,7 +88,7 @@ public class CollectionProcessor extends AbstractProcessor {
         Writer out = loaderFileObject.openWriter();
 
         if(sourceCode == null)
-            out.write("package "+ fullPackageName +";public class "+className+" {public static void load(){");
+            out.write("package "+ fullPackageName +";public class "+className+" {public static void load(){}static{");
         else
             out.write(sourceCode.substring(0,sourceCode.length()-2));
         
