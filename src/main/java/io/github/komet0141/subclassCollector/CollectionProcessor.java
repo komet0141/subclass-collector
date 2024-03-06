@@ -8,8 +8,7 @@ import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic.Kind;
 import javax.tools.JavaFileObject;
-import java.io.InputStream;
-import java.io.Reader;
+import java.io.IOException;
 import java.io.Writer;
 import java.lang.annotation.Annotation;
 import java.util.*;
@@ -17,7 +16,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class CollectionProcessor extends AbstractProcessor {
-    private final String pkgName = CollectionProcessor.class.getPackage().getName()+".loader";
+    private final String pkgNameBase = CollectionProcessor.class.getPackage().getName()+".loader";
     private final String className = "SubclassLoader";
     private boolean noError = true;
     private int numRound = 0;
@@ -58,47 +57,53 @@ public class CollectionProcessor extends AbstractProcessor {
         note("round: "+numRound);
         processCollectSubClass(roundEnv);
         processInitializer(roundEnv);
-        if(noError && !subclasses.isEmpty()) generateCode();
+        if(noError && !subclasses.isEmpty()) try {generateCode();}
+        catch (Exception e) {
+            error("failed to create source file.");
+            warn(e);
+            Arrays.stream(e.getStackTrace()).forEach(this::warn);
+        };
         note("==========================ending round of annotation processing of CollectSubclass==========================");
         return true;
     }
     
-    private void makeFile() {
-        try {loaderFileObject = filer.createSourceFile(pkgName+"."+className);}
-        catch (Exception e) {error("failed to create source file.");}
-    }
-    
-    private void generateCode() {
+    private void generateCode() throws IOException {
         note("generating code of round: "+numRound);
         note("loading subclasses: %s",subclasses);
         note("collecting superclasses: %s",collectingClasses.stream().map(x->x.type).collect(Collectors.toList()));
         
-        
         String sourceCode = null;
-        try(Scanner s = new Scanner(loaderFileObject.openInputStream()).useDelimiter("^")) {
+        try (Scanner s = new Scanner(loaderFileObject.openInputStream()).useDelimiter("^")) {
             sourceCode = s.next();
-            note(sourceCode);
-        } catch (Exception e) {}
+        }catch (Exception e){}
         
-        makeFile();
-        try (Writer out = loaderFileObject.openWriter()) {
-            
-            if(sourceCode == null) out.write("package "+ pkgName +";public class "+className+" {public static void load(){");
-            else out.write(sourceCode.substring(0,sourceCode.length()-2));
-            
-            
-            for (Element clazz : subclasses)
+        
+        String subpkgName = elementUtils
+                .getPackageOf(subclasses.get(0))
+                .getQualifiedName()
+                .toString();
+        String fullPackageName = pkgNameBase+"."+subpkgName;
+        
+        loaderFileObject = filer.createSourceFile(fullPackageName+"."+className);
+        Writer out = loaderFileObject.openWriter();
+
+        if(sourceCode == null)
+            out.write("package "+ fullPackageName +";public class "+className+" {public static void load(){");
+        else
+            out.write(sourceCode.substring(0,sourceCode.length()-2));
+        
+        generateInitializer(out);
+    }
+    
+    private void generateInitializer(Writer out) throws IOException {
+        for (Element clazz : subclasses)
             for (collectingClass collClass : collectingClasses)
-            if (typeUtils.isAssignable(clazz.asType(), collClass.type.asType()))
-                out.write(clazz + "." + collClass.initializer.getSimpleName() + "(" + clazz + ".class);");
-            
-            out.write("}}");
-            out.close();
-            subclasses.clear();
-        } catch (Exception e) {
-            error("failed to generate source file");
-            e.printStackTrace();
-        }
+                if (typeUtils.isAssignable(clazz.asType(), collClass.type.asType()))
+                    out.write(clazz + "." + collClass.initializer.getSimpleName() + "(" + clazz + ".class);");
+        
+        out.write("}}");
+        out.close();
+        subclasses.clear();
     }
     
     @SuppressWarnings("unchecked")

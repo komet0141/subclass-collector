@@ -8,6 +8,6 @@
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
-    <orderEntry type="library" exported="" name="collect-subclass-1.0" level="project" />
+    <orderEntry type="library" name="collect-subclass-1.0.2" level="project" />
   </component>
 </module>

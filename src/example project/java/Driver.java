@@ -1,5 +1,5 @@
+import io.github.komet0141.subclassCollector.loader.organisms.Mammals.SubclassLoader;
 import organisms.OrganismBase;
-import io.github.komet0141.subclassCollector.loader.SubclassLoader;
 import unorganic.UnorganicBase;
 
 public class Driver {
