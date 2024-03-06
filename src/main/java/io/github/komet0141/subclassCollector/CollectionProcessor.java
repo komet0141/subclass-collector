@@ -90,7 +90,7 @@ public class CollectionProcessor extends AbstractProcessor {
             for (Element clazz : subclasses)
             for (collectingClass collClass : collectingClasses)
             if (typeUtils.isAssignable(clazz.asType(), collClass.type.asType()))
-                out.write(collClass.type + "." + collClass.initializer.getSimpleName() + "(" + clazz + ".class);");
+                out.write(clazz + "." + collClass.initializer.getSimpleName() + "(" + clazz + ".class);");
             
             out.write("}}");
             out.close();
