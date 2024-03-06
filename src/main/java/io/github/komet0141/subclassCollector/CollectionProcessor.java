@@ -73,8 +73,8 @@ public class CollectionProcessor extends AbstractProcessor {
         note("collecting superclasses: %s",collectingClasses.stream().map(x->x.type).collect(Collectors.toList()));
         
         String sourceCode = null;
-        try (Scanner s = new Scanner(loaderFileObject.openInputStream()).useDelimiter("^")) {
-            sourceCode = s.next();
+        try {
+            sourceCode = new Scanner(loaderFileObject.openInputStream()).useDelimiter("^").next();
         }catch (Exception e){}
         
         
