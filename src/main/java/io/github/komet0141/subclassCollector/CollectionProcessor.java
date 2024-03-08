@@ -4,11 +4,11 @@ import javax.annotation.processing.*;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
 import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic.Kind;
 import javax.tools.JavaFileObject;
-import java.io.IOException;
 import java.io.Writer;
 import java.lang.annotation.Annotation;
 import java.util.*;
@@ -18,27 +18,23 @@ import java.util.stream.Stream;
 public class CollectionProcessor extends AbstractProcessor {
     private final String pkgNameBase = CollectionProcessor.class.getPackage().getName()+".loader";
     private final String className = "SubclassLoader";
-    private boolean noError = true;
     private int numRound = 0;
     private Elements elementUtils;
     private Types typeUtils;
     private Messager messager;
     private Filer filer;
     private JavaFileObject loaderFileObject;
-    private final List<Element> subclasses = new ArrayList<>();
-    private final List<collectingClass> collectingClasses = new ArrayList<>();
+    private final Map<String, String> initializers = new HashMap<>();
     @Override
     public Set<String> getSupportedAnnotationTypes() {
         return Stream.of(CollectSubclass.class, CollectSubclass.Initializer.class)
                 .map(Class::getName)
                 .collect(Collectors.toSet());
     }
-    
     @Override
     public SourceVersion getSupportedSourceVersion() {
         return SourceVersion.RELEASE_8;
     }
-    
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
         super.init(processingEnv);
@@ -47,43 +43,153 @@ public class CollectionProcessor extends AbstractProcessor {
         messager = processingEnv.getMessager();
         filer = processingEnv.getFiler();
         
-        subclasses.clear();
         numRound++;
     }
     
+    
+    
+    
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-        note("=========================starting round of annotation processing of CollectSubclass=========================");
-        note("round: "+numRound);
-        processCollectSubClass(roundEnv);
-        processInitializer(roundEnv);
-        if(noError && !subclasses.isEmpty()) try {generateCode();}
+        note("=========================starting round "+numRound+" of annotation processing of CollectSubclass=========================");
+        try {
+            note("---performing validation of round %s---", numRound);
+            validateSuperclasses(roundEnv);
+            validateInitializers(roundEnv);
+            note("-----ending validation of round %s-----", numRound);
+            mapInitializers(roundEnv);
+            if(!initializers.isEmpty()) generateCode();
+        }
         catch (Exception e) {
-            error("failed to create source file.");
-            warn(e);
-            Arrays.stream(e.getStackTrace()).forEach(this::warn);
-        };
-        note("==========================ending round of annotation processing of CollectSubclass==========================");
+            error("failed to generate loader.");
+            error(e.toString());
+            initializers.clear();
+            Arrays.stream(e.getStackTrace()).forEach(this::error);
+        }
+        note("==========================ending round "+numRound+" of annotation processing of CollectSubclass==========================");
         return true;
     }
+    private void validateInitializers(RoundEnvironment roundEnv) throws Exception {
+        for(Element elm : roundEnv.getElementsAnnotatedWith(CollectSubclass.Initializer.class)) {
+            ExecutableElement exElm = (ExecutableElement) elm;
+            
+            note("evaluating as initializer: %s.%s",exElm.getEnclosingElement(),exElm.getSimpleName());
+            TypeElement enclosingElm = (TypeElement) exElm.getEnclosingElement();
+            
+            if (!exElm.getModifiers().contains(Modifier.PUBLIC))
+                throw new Exception(format("%s has to be public to be used as initializer", exElm));
+            
+            if (!exElm.getModifiers().contains(Modifier.STATIC))
+                throw new Exception(format("%s has to be static to be used as initializer", exElm));
+            
+            if (!isValidSuperclassAnnotation(enclosingElm))
+                throw new Exception(format("%s annotation should be used in methods enclosed by class annotated with %s annotation, or subclass annotated with %s",
+                        CollectSubclass.Initializer.class, CollectSubclass.class, CollectSubclass.Abstract.class));
+            
+            if (exElm.getReturnType().getKind() != TypeKind.VOID)
+                warn("return value of %s has no use", exElm);
+            
+            List<? extends VariableElement> params = exElm.getParameters();
+            TypeElement classE = elementUtils.getTypeElement(Class.class.getCanonicalName());
+            TypeMirror defaultParamType = typeUtils.getDeclaredType(classE, typeUtils.getWildcardType(enclosingElm.asType(),null) );
+            if (params.size() != 1 || !typeUtils.isAssignable(defaultParamType, params.get(0).asType()))
+                throw new Exception(format("%s should be (%s) -> void", exElm, defaultParamType));
+            
+            note(" qualified as initializer: %s", exElm.getSimpleName());
+            initializers.put(exElm.getEnclosingElement().toString(), exElm.getSimpleName().toString());
+        }
+    }
+    private void validateSuperclasses(RoundEnvironment roundEnv) throws Exception{
+        for (Element elm : getSuperclassElements(roundEnv)) {
+            note("evaluating as collecting superclass: %s", elm);
+            TypeElement typeElm = (TypeElement) elm;
+            
+            isValidSubclass(typeElm);
+            
+            Element superclassElm = typeUtils.asElement(typeElm.getSuperclass());
+            if(containAnnotation(superclassElm, CollectSubclass.class))
+                throw new Exception(format("subclass of %s cannot have %s annotation(%s)", superclassElm, CollectSubclass.class, typeElm));
+            
+            int numInitializer = getInitializers(typeElm).size();
+            
+            if (numInitializer > 1)
+                throw new Exception(format("%s can have only 1 initializer", typeElm));
+            
+            if (numInitializer == 0)
+                throw new Exception(format("%s needs to have an method annotated with %s", typeElm, CollectSubclass.Initializer.class));
+            
+            note(" qualified as collecting superclass: %s\n", typeElm);
+        }
+    }
     
-    private void generateCode() throws IOException {
-        note("generating code of round: "+numRound);
-        note("loading subclasses: %s",subclasses);
-        note("collecting superclasses: %s",collectingClasses.stream().map(x->x.type).collect(Collectors.toList()));
+    private Set<Element> getSuperclassElements(RoundEnvironment roundEnv) {
+        return new HashSet<Element>(){{
+            roundEnv.getElementsAnnotatedWith(CollectSubclass.class)
+                    .stream()
+                    .filter(CollectionProcessor.this::isValidSuperclassAnnotation)
+                    .forEach(this::add);
+            roundEnv.getElementsAnnotatedWith(CollectSubclass.Abstract.class)
+                    .stream()
+                    .filter(CollectionProcessor.this::isValidSuperclassAnnotation)
+                    .forEach(this::add);
+        }};
+    }
+    private Set<Element> getCollectingSubclasses(RoundEnvironment roundEnv) {
+        return new HashSet<Element>(){{
+            this.addAll(roundEnv.getElementsAnnotatedWith(CollectSubclass.class));
+            roundEnv.getElementsAnnotatedWith(CollectSubclass.Abstract.class)
+                    .stream()
+                    .filter(CollectionProcessor.this::isValidSuperclassAnnotation)
+                    .forEach(this::add);
+        }};
+    }
+    private boolean isValidSuperclassAnnotation(Element elm) {
+        boolean result = hasAnnotation(elm, CollectSubclass.class) ||
+               hasAnnotation(typeUtils.asElement(((TypeElement) elm).getSuperclass()),CollectSubclass.Abstract.class);
+        return result;
+    }
+    private void isValidSubclass(TypeElement typeElm) throws Exception{
+        note("evaluating as collected class: %s",typeElm);
         
+        if(!typeElm.getModifiers().contains(Modifier.PUBLIC))
+            throw new Exception(format("class annotated with %s needs to be public", CollectSubclass.class));
+        
+        if(typeElm.getKind() == ElementKind.INTERFACE)
+            throw new Exception(format("annotating %s with %s has no meaning because annotations of interfaces are not inherited", typeElm, CollectSubclass.class));
+
+        
+        note(" qualified as collected class: %s",typeElm);
+    }
+    private void mapInitializers(RoundEnvironment roundEnv) {
+        note("---mapping initializers to subclasses (round %s)---",numRound);
+        for(Element elm : getCollectingSubclasses(roundEnv)) {
+            note("mapping initializer of: %s",elm);
+            List<String> path = new ArrayList<>();
+            for(TypeElement cls = (TypeElement) elm;isCollectedSubclass(cls);cls = (TypeElement) typeUtils.asElement(cls.getSuperclass())){
+                path.add(cls.toString());
+            }
+            note("final path: %s", path);
+            String initializerName = getInitializers(elementUtils.getTypeElement(path.get(path.size()-1)))
+                    .get(0)
+                    .getSimpleName()
+                    .toString();
+            note("mapping initializer to: %s.%s", elm,initializerName);
+            path.forEach(className -> initializers.put(className, initializerName));
+        }
+        note("----finished mapping of initializers (round %s)----",numRound);
+    }
+    private void generateCode() throws Exception {
+        note("loading subclasses: %s (round %s)",initializers.keySet(),numRound);
+
         String sourceCode = null;
         try {
             sourceCode = new Scanner(loaderFileObject.openInputStream()).useDelimiter("^").next();
         }catch (Exception e){}
-        
-        
-        String subpkgName = elementUtils
-                .getPackageOf(subclasses.get(0))
-                .getQualifiedName()
-                .toString();
+
+
+        String subpkgName = initializers.keySet().iterator().next();
         String fullPackageName = pkgNameBase+"."+subpkgName;
-        
+
         loaderFileObject = filer.createSourceFile(fullPackageName+"."+className);
         Writer out = loaderFileObject.openWriter();
 
@@ -91,146 +197,62 @@ public class CollectionProcessor extends AbstractProcessor {
             out.write("package "+ fullPackageName +";public class "+className+" {public static void load(){}static{");
         else
             out.write(sourceCode.substring(0,sourceCode.length()-2));
-        
+
         generateInitializer(out);
     }
-    
-    private void generateInitializer(Writer out) throws IOException {
-        for (Element clazz : subclasses)
-            for (collectingClass collClass : collectingClasses)
-                if (typeUtils.isAssignable(clazz.asType(), collClass.type.asType()))
-                    out.write(clazz + "." + collClass.initializer.getSimpleName() + "(" + clazz + ".class);");
+    private void generateInitializer(Writer out) throws Exception {
+        for (Map.Entry<String, String> entry : initializers.entrySet()) {
+            String key = entry.getKey();
+            String initName = entry.getValue();
+            boolean isAbstract = elementUtils
+                    .getTypeElement(key)
+                    .getModifiers()
+                    .contains(Modifier.ABSTRACT);
+            if (!isAbstract) out.write(format("%s.%s(%s.class);", key, initName, key));
+        }
         
         out.write("}}");
         out.close();
-        subclasses.clear();
+        initializers.clear();
+    }
+    private boolean isCollectedSubclass(TypeElement typeE) {
+        return containAnnotation(typeE, CollectSubclass.class) ||
+                (
+                        !hasAnnotation(typeE, CollectSubclass.Abstract.class) &&
+                        containAnnotation(typeE, CollectSubclass.Abstract.class)
+                );
     }
     
-    @SuppressWarnings("unchecked")
-    private void processInitializer(RoundEnvironment roundEnv) {
-        for(ExecutableElement exElm : (Set<ExecutableElement>)roundEnv.getElementsAnnotatedWith(CollectSubclass.Initializer.class)) {
-            note("evaluating %s of %s",exElm, exElm.getEnclosingElement());
-            if(isValidInitializer(exElm))
-                collectingClasses.add(new collectingClass((TypeElement) exElm.getEnclosingElement(), exElm));
-        }
-    }
     
-    private boolean isValidInitializer(ExecutableElement exElm) {
-        Element enclosingElm = exElm.getEnclosingElement();
-        
-        if (!exElm.getModifiers().contains(Modifier.PUBLIC)) {
-            error("%s has to be public to be used as initializer", exElm);
-            return false;
-        }
-        
-        if (!exElm.getModifiers().contains(Modifier.STATIC)) {
-            error("%s has to be static to be used as initializer", exElm);
-            return false;
-        }
-        
-        if (!hasAnnotation(enclosingElm, CollectSubclass.class)) {
-            error("%s annotation should be used in methods enclosed by class annotated with initializeSubclass annotation", CollectSubclass.Initializer.class);
-            return false;
-        }
-        
-        if (exElm.getReturnType().getKind() != TypeKind.VOID) {
-            warn("return value of %s has no use", exElm);
-        }
-        
-        List<? extends VariableElement> params = exElm.getParameters();
-        if (params.size() != 1 || typeUtils.isSameType(params.get(0).asType(), enclosingElm.asType())) {
-            error("%s should be (%s) -> void", exElm, enclosingElm);
-            return false;
-        }
-        
-        note("%s qualified as initializer", exElm);
-        return true;
-    }
-    @SuppressWarnings("unchecked")
-    private void processCollectSubClass(RoundEnvironment roundEnv) {
-        for(TypeElement elm : (Set<TypeElement>)roundEnv.getElementsAnnotatedWith(CollectSubclass.class)) {
-            final String elmName = elm.getQualifiedName().toString();
-            note("processing: "+elmName);
-            if(isValidCollectedClass(elm)) subclasses.add(elm);
-        }
-    }
-    private boolean isValidCollectedClass(TypeElement typeElm) {
-        
-        if(!typeElm.getModifiers().contains(Modifier.PUBLIC)) {
-            error("class annotated with %s needs to be public", CollectSubclass.class);
-            return false;
-        }
-        
-        if(typeElm.getKind() == ElementKind.INTERFACE) {
-            warn("annotating %s with %s has no meaning because annotations of interfaces are not inherited", typeElm, CollectSubclass.class);
-            return false;
-        }
-        if(hasAnnotation(typeElm, CollectSubclass.class)) {
-            Element superclassElm = typeUtils.asElement(typeElm.getSuperclass());
-            if(containAnnotation(superclassElm, CollectSubclass.class)) {
-                error("subclass of %s cannot have %s annotation", superclassElm, CollectSubclass.class);
-                return false;
-            }
-            
-            if (!isValidSuperclass(typeElm)) return false;
-        }
-        
-        if(typeElm.getModifiers().contains(Modifier.ABSTRACT)) {
-            warn("skipping %s because %s is an abstract class", typeElm, typeElm);
-            return false;
-        }
-        
-        note("%s qualified as collected class",typeElm);
-        return true;
-    }
-    boolean isValidSuperclass(TypeElement typeElm) {
-        note("evaluating %s as collecting superclass", typeElm);
-        int numInitializer = typeElm
+    private List<ExecutableElement> getInitializers(TypeElement typeElm) {
+        return typeElm
                 .getEnclosedElements()
                 .stream()
-                .map(t -> containAnnotation(t, CollectSubclass.Initializer.class))
-                .mapToInt(bool -> bool ? 1 : 0)
-                .sum();
-        if (numInitializer > 1) {
-            error("%s can have only 1 initializer", typeElm);
-            return false;
-        }
-        if (numInitializer == 0) {
-            error("%s needs to have an method annotated with %s", typeElm, CollectSubclass.Initializer.class);
-            return false;
-        }
-        
-        note("%s qualified as collecting superclass", typeElm);
-        return true;
+                .filter(elm -> containAnnotation(elm, CollectSubclass.Initializer.class))
+                .map(x->(ExecutableElement)x)
+                .collect(Collectors.toList());
     }
-    
-    
-    
-    private void warn(Object msg) {
-        messager.printMessage(Kind.WARNING, msg == null ? "null" : msg.toString());
+    private void warn(Object msg, Object... objs) {
+        messager.printMessage(Kind.WARNING, format(msg, objs));
     }
-    private void warn(String str, Object... objs) {
-        warn(String.format(str, objs));
+    private void note(Object msg, Object... objs) {
+        messager.printMessage(Kind.NOTE, format(msg, objs));
     }
-    private void note(Object msg) {
-        messager.printMessage(Kind.NOTE, msg == null ? "null" : msg.toString());
+    private void error(Object msg, Object... objs) {
+        messager.printMessage(Kind.ERROR, format(msg, objs));
     }
-    private void note(String str, Object... objs) {
-        note(String.format(str,objs));
+    private String format(Object msg, Object... objs) {
+        if(msg instanceof String) {
+            return String.format((String) msg, objs);
+        } else
+            return msg +", "+String.join(", ",Arrays.stream(objs).map(String::valueOf).toArray(String[]::new));
     }
-    private void error(Object msg) {
-        messager.printMessage(Kind.ERROR, msg == null ? "null" : msg.toString());
-        noError = false;
-    }
-    private void error(String str, Object... objs) {
-        error(String.format(str,objs));
-    }
-    private boolean hasAnnotation(Element elm, Class<? extends Annotation> annotation) {
+    private static boolean hasAnnotation(Element elm, Class<? extends Annotation> annotation) {
         return elm.getAnnotationMirrors()
                 .stream()
                 .map(Objects::toString)
                 .map(x -> x.substring(1))
-                .map(x -> x.equals(annotation.getName()))
+                .map(x -> x.equals(annotation.getCanonicalName()))
                 .reduce(false, (x, y) -> x || y);
     }
     private boolean containAnnotation(Element elm, Class<? extends Annotation> annotation) {

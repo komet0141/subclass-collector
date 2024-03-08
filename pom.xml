@@ -7,7 +7,7 @@
     <!--  no upper case letters in this part  -->
     <groupId>io.github.komet0141</groupId>
     <artifactId>collect-subclass</artifactId>
-    <version>1.0.3</version>
+    <version>1.0.4</version>
 
     <!--  don't forget to change maven-publish.yml  -->
     <properties>
@@ -45,6 +45,15 @@
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                    <outputDirectory>libs</outputDirectory>
+                </configuration>
+            </plugin>
+
         </plugins>
     </build>
 </project>

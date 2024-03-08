@@ -1,4 +1,4 @@
-import io.github.komet0141.subclassCollector.loader.organisms.Mammals.SubclassLoader;
+import io.github.komet0141.subclassCollector.loader.organisms.OrganismBase.SubclassLoader;
 import organisms.OrganismBase;
 import unorganic.UnorganicBase;
 

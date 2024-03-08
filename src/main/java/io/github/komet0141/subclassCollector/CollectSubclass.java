@@ -3,11 +3,15 @@ package io.github.komet0141.subclassCollector;
 import java.lang.annotation.*;
 
 @Target(ElementType.TYPE)
-@Retention(RetentionPolicy.RUNTIME)
+@Retention(RetentionPolicy.CLASS)
 @Inherited
 public @interface CollectSubclass {
+    @Target(ElementType.TYPE)
+    @Retention(RetentionPolicy.CLASS)
+    @Inherited
+    public @interface Abstract {}
     
     @Target(ElementType.METHOD)
-    @Retention(RetentionPolicy.SOURCE)
+    @Retention(RetentionPolicy.CLASS)
     @interface Initializer {}
 }
