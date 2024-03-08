@@ -139,7 +139,7 @@ public class CollectionProcessor extends AbstractProcessor {
             this.addAll(roundEnv.getElementsAnnotatedWith(CollectSubclass.class));
             roundEnv.getElementsAnnotatedWith(CollectSubclass.Abstract.class)
                     .stream()
-                    .filter(CollectionProcessor.this::isValidSuperclassAnnotation)
+                    .filter(x->!hasAnnotation(x, CollectSubclass.Abstract.class))
                     .forEach(this::add);
         }};
     }
