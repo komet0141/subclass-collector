@@ -9,9 +9,14 @@ public @interface CollectSubclass {
     @Target(ElementType.TYPE)
     @Retention(RetentionPolicy.CLASS)
     @Inherited
-    public @interface Abstract {}
+    @interface Abstract {}
     
     @Target(ElementType.METHOD)
     @Retention(RetentionPolicy.CLASS)
     @interface Initializer {}
+    
+    @Retention(RetentionPolicy.SOURCE)
+    @interface OutputPackage{
+        String value();
+    }
 }

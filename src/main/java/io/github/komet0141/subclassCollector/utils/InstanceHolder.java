@@ -38,6 +38,5 @@ public class InstanceHolder <SUPER_CLASS> extends HashMap<String, SUPER_CLASS> {
     public SUPER_CLASS get(Class<? extends SUPER_CLASS> clazz) {
         return get(clazz.getName());
     }
-    
     public void lock(){isLocked = true;}
 }

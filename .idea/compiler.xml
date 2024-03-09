@@ -9,6 +9,7 @@
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
+      <module name="collect-subclass" target="1.8" />
       <module name="initialize-subclass-tester" target="1.8" />
     </bytecodeTargetLevel>
   </component>

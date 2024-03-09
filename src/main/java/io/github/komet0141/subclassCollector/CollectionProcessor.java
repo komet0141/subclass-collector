@@ -17,6 +17,7 @@ import java.util.stream.Stream;
 
 public class CollectionProcessor extends AbstractProcessor {
     private final String pkgNameBase = CollectionProcessor.class.getPackage().getName()+".loader";
+    private String subpkgName;
     private final String className = "SubclassLoader";
     private int numRound = 0;
     private Elements elementUtils;
@@ -58,16 +59,34 @@ public class CollectionProcessor extends AbstractProcessor {
             validateInitializers(roundEnv);
             note("-----ending validation of round %s-----", numRound);
             mapInitializers(roundEnv);
-            if(!initializers.isEmpty()) generateCode();
+            if(!initializers.isEmpty()) {
+                validatePackageName(roundEnv);
+                generateCode();
+            }
         }
         catch (Exception e) {
+            initializers.clear();
             error("failed to generate loader.");
             error(e.toString());
-            initializers.clear();
             Arrays.stream(e.getStackTrace()).forEach(this::error);
         }
         note("==========================ending round "+numRound+" of annotation processing of CollectSubclass==========================");
         return true;
+    }
+    
+    private void validatePackageName(RoundEnvironment roundEnv) throws Exception {
+        Set<? extends Element> elms = roundEnv.getElementsAnnotatedWith(CollectSubclass.OutputPackage.class);
+        if(elms.isEmpty()) throw new Exception(format("there needs to be %s somewhere in code to specify package name of %s", CollectSubclass.OutputPackage.class,className));
+        if(elms.size() > 1) throw new Exception(format("there can be only one %s in your code", CollectSubclass.OutputPackage.class));
+        
+        elms
+                .iterator()
+                .next()
+                .getAnnotationMirrors()
+                .get(0)
+                .getElementValues()
+                .values()
+                .forEach(x->{subpkgName = (String) x.getValue();});
     }
     private void validateInitializers(RoundEnvironment roundEnv) throws Exception {
         for(Element elm : roundEnv.getElementsAnnotatedWith(CollectSubclass.Initializer.class)) {
@@ -121,7 +140,6 @@ public class CollectionProcessor extends AbstractProcessor {
             note(" qualified as collecting superclass: %s\n", typeElm);
         }
     }
-    
     private Set<Element> getSuperclassElements(RoundEnvironment roundEnv) {
         return new HashSet<Element>(){{
             roundEnv.getElementsAnnotatedWith(CollectSubclass.class)
@@ -180,23 +198,13 @@ public class CollectionProcessor extends AbstractProcessor {
     }
     private void generateCode() throws Exception {
         note("loading subclasses: %s (round %s)",initializers.keySet(),numRound);
-
-        String sourceCode = null;
-        try {
-            sourceCode = new Scanner(loaderFileObject.openInputStream()).useDelimiter("^").next();
-        }catch (Exception e){}
-
-
-        String subpkgName = initializers.keySet().iterator().next();
         String fullPackageName = pkgNameBase+"."+subpkgName;
+        String fullClassName = fullPackageName+"."+className;
+        note("generating "+fullClassName);
 
-        loaderFileObject = filer.createSourceFile(fullPackageName+"."+className);
+        loaderFileObject = filer.createSourceFile(fullClassName);
         Writer out = loaderFileObject.openWriter();
-
-        if(sourceCode == null)
-            out.write("package "+ fullPackageName +";public class "+className+" {public static void load(){}static{");
-        else
-            out.write(sourceCode.substring(0,sourceCode.length()-2));
+        out.write("package "+ fullPackageName +";public class "+className+" {public static void load(){}static{");
 
         generateInitializer(out);
     }
