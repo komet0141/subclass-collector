@@ -12,7 +12,11 @@ public class SubclassLoader {
         }
     }
     public static void load(Class<?> clazz) {
-        load(clazz.getAnnotation(CollectSubclass.OutputPackage.class).value());
+        String subpackageName;
+        try {
+            subpackageName = clazz.getAnnotation(CollectSubclass.OutputPackage.class).value();
+        } catch (Exception e) {throw new RuntimeException("could not find "+ CollectSubclass.OutputPackage.class+"in given class");}
+        load(subpackageName);
     }
     public static String fullClassName(String subpackageName) {
         return fullPackageName(subpackageName)+"."+SubclassLoader.class.getSimpleName();
