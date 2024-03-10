@@ -1,5 +1,7 @@
 package io.github.komet0141.subclassCollector;
 
+import io.github.komet0141.subclassCollector.utils.SubclassLoader;
+
 import javax.annotation.processing.*;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
@@ -16,15 +18,12 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class CollectionProcessor extends AbstractProcessor {
-    private final String pkgNameBase = CollectionProcessor.class.getPackage().getName()+".loader";
     private String subpkgName;
-    private final String className = "SubclassLoader";
     private int numRound = 0;
     private Elements elementUtils;
     private Types typeUtils;
     private Messager messager;
     private Filer filer;
-    private JavaFileObject loaderFileObject;
     private final Map<String, String> initializers = new HashMap<>();
     @Override
     public Set<String> getSupportedAnnotationTypes() {
@@ -75,7 +74,7 @@ public class CollectionProcessor extends AbstractProcessor {
     }
     private void validatePackageName(RoundEnvironment roundEnv) throws Exception {
         Set<? extends Element> elms = roundEnv.getElementsAnnotatedWith(CollectSubclass.OutputPackage.class);
-        if(elms.isEmpty()) throw new Exception(format("there needs to be %s somewhere in code to specify package name of %s", CollectSubclass.OutputPackage.class,className));
+        if(elms.isEmpty()) throw new Exception(format("there needs to be %s somewhere in code to specify package name of %s", CollectSubclass.OutputPackage.class,SubclassLoader.class.getSimpleName()));
         if(elms.size() > 1) throw new Exception(format("there can be only one %s in your code", CollectSubclass.OutputPackage.class));
         
         elms
@@ -197,13 +196,12 @@ public class CollectionProcessor extends AbstractProcessor {
     }
     private void generateCode() throws Exception {
         note("loading subclasses: %s (round %s)",initializers.keySet(),numRound);
-        String fullPackageName = pkgNameBase+"."+subpkgName;
-        String fullClassName = fullPackageName+"."+className;
+        String fullClassName = SubclassLoader.fullClassName(subpkgName);
         note("generating "+fullClassName);
-
-        loaderFileObject = filer.createSourceFile(fullClassName);
+        
+        JavaFileObject loaderFileObject = filer.createSourceFile(fullClassName);
         Writer out = loaderFileObject.openWriter();
-        out.write("package "+ fullPackageName +";public class "+className+" {public static void load(){}static{");
+        out.write("package "+ SubclassLoader.fullPackageName(subpkgName) +";public class "+SubclassLoader.class.getSimpleName()+" {public static void load(){}static{");
 
         generateInitializer(out);
     }

@@ -15,7 +15,7 @@ public @interface CollectSubclass {
     @Retention(RetentionPolicy.CLASS)
     @interface Initializer {}
     
-    @Retention(RetentionPolicy.SOURCE)
+    @Retention(RetentionPolicy.RUNTIME)
     @interface OutputPackage{
         String value();
     }
