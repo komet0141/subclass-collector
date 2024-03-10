@@ -84,7 +84,7 @@ public class CollectionProcessor extends AbstractProcessor {
                 .get(0)
                 .getElementValues()
                 .values()
-                .forEach(x->{subpkgName = (String) x.getValue();});
+                .forEach(x-> subpkgName = (String) x.getValue());
     }
     private void validateInitializers(RoundEnvironment roundEnv) throws Exception {
         for(Element elm : roundEnv.getElementsAnnotatedWith(CollectSubclass.Initializer.class)) {
@@ -160,9 +160,8 @@ public class CollectionProcessor extends AbstractProcessor {
         }};
     }
     private boolean isValidSuperclassAnnotation(Element elm) {
-        boolean result = hasAnnotation(elm, CollectSubclass.class) ||
+        return hasAnnotation(elm, CollectSubclass.class) ||
                hasAnnotation(typeUtils.asElement(((TypeElement) elm).getSuperclass()),CollectSubclass.Abstract.class);
-        return result;
     }
     private void isValidSubclass(TypeElement typeElm) throws Exception{
         note("evaluating as collected class: %s",typeElm);
