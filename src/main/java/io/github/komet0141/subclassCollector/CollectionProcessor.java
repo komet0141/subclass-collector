@@ -77,7 +77,7 @@ public class CollectionProcessor extends AbstractProcessor {
     private void validatePackageName(RoundEnvironment roundEnv) throws Exception {
         Set<? extends Element> elms = roundEnv.getElementsAnnotatedWith(CollectSubclass.OutputPackage.class);
         if (elms.isEmpty())
-            throw new Exception(format("there needs to be %s somewhere in code to specify package name of %s", CollectSubclass.OutputPackage.class, SubclassLoader.getClassName()));
+            throw new Exception(format("there needs to be %s somewhere in code to specify package name of %s", CollectSubclass.OutputPackage.class, className));
         if (elms.size() > 1)
             throw new Exception(format("there can be only one %s in your code", CollectSubclass.OutputPackage.class));
         
