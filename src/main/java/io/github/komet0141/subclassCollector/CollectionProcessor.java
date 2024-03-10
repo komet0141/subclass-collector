@@ -73,7 +73,6 @@ public class CollectionProcessor extends AbstractProcessor {
         note("==========================ending round "+numRound+" of annotation processing of CollectSubclass==========================");
         return true;
     }
-    
     private void validatePackageName(RoundEnvironment roundEnv) throws Exception {
         Set<? extends Element> elms = roundEnv.getElementsAnnotatedWith(CollectSubclass.OutputPackage.class);
         if(elms.isEmpty()) throw new Exception(format("there needs to be %s somewhere in code to specify package name of %s", CollectSubclass.OutputPackage.class,className));
