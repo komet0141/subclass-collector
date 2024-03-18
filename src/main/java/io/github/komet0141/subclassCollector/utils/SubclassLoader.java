@@ -18,7 +18,7 @@ public class SubclassLoader {
         try {
             subpackageName = clazz.getAnnotation(CollectSubclass.OutputPackage.class).value();
         } catch (Exception e) {throw new RuntimeException("could not find "+ CollectSubclass.OutputPackage.class+"in given class");}
-        load(subpackageName);
+        load(subpackageName, args);
     }
     public static String fullClassName(String subpackageName) {
         return fullPackageName(subpackageName)+"."+SubclassLoader.class.getSimpleName();
