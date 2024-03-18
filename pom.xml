@@ -7,7 +7,7 @@
     <!--  no upper case letters in this part  -->
     <groupId>io.github.komet0141</groupId>
     <artifactId>subclass-collector</artifactId>
-    <version>1.2.1</version>
+    <version>1.2.2</version>
 
     <!--  don't forget to change maven-publish.yml  -->
     <properties>

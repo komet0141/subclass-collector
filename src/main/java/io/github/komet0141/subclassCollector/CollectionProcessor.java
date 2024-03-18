@@ -107,10 +107,14 @@ public class CollectionProcessor extends AbstractProcessor {
                 warn("return value of %s has no use", exElm);
             
             List<? extends VariableElement> params = exElm.getParameters();
-            TypeElement classE = elementUtils.getTypeElement(Class.class.getCanonicalName());
-            TypeMirror defaultParamType = typeUtils.getDeclaredType(classE, typeUtils.getWildcardType(enclosingElm.asType(),null) );
-            if (params.size() != 1 || !typeUtils.isAssignable(defaultParamType, params.get(0).asType()))
-                throw new Exception(format("%s should be (%s) -> void", exElm, defaultParamType));
+            TypeElement classElm = elementUtils.getTypeElement(Class.class.getCanonicalName());
+            TypeMirror clsExtsEnclosingType = typeUtils.getDeclaredType(classElm, typeUtils.getWildcardType(enclosingElm.asType(),null) );
+            TypeMirror ObjArrType = typeUtils.getArrayType(elementUtils.getTypeElement(Object.class.getCanonicalName()).asType());
+            
+            if (params.size() != 2 ||
+                !typeUtils.isAssignable(clsExtsEnclosingType, params.get(0).asType()) ||
+                !typeUtils.isSameType(ObjArrType, params.get(1).asType()))
+                throw new Exception(format("%s should be (%s) -> void", exElm, clsExtsEnclosingType));
             
             note(" qualified as initializer: %s", exElm.getSimpleName());
             initializers.put(exElm.getEnclosingElement().toString(), exElm.getSimpleName().toString());
@@ -200,7 +204,9 @@ public class CollectionProcessor extends AbstractProcessor {
         
         JavaFileObject loaderFileObject = filer.createSourceFile(fullClassName);
         Writer out = loaderFileObject.openWriter();
-        out.write("package "+ SubclassLoader.fullPackageName(subpkgName) +";public class "+SubclassLoader.class.getSimpleName()+" {public static void load(){}static{");
+        out.write("package "+ SubclassLoader.fullPackageName(subpkgName) +
+                ";public class "+SubclassLoader.class.getSimpleName()
+                +" {private static boolean loaded=false;public static void load(Object[] args){if(loaded)return;loaded=true;");
 
         generateInitializer(out);
     }
@@ -212,7 +218,7 @@ public class CollectionProcessor extends AbstractProcessor {
                     .getTypeElement(key)
                     .getModifiers()
                     .contains(Modifier.ABSTRACT);
-            if (!isAbstract) out.write(format("%s.%s(%s.class);", key, initName, key));
+            if (!isAbstract) out.write(format("%s.%s(%s.class, args);", key, initName, key));
         }
         
         out.write("}}");

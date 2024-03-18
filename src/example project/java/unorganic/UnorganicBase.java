@@ -8,7 +8,7 @@ public abstract class UnorganicBase {
     public static InstanceHolder<UnorganicBase> INSTANCES = new InstanceHolder<>();
     
     @CollectSubclass.Initializer
-    public static void init(Class<? extends UnorganicBase>clazz){
+    public static void init(Class<? extends UnorganicBase>clazz, Object[] args){
         INSTANCES.put(clazz);
     }
 }

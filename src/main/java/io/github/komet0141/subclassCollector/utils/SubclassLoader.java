@@ -4,14 +4,16 @@ import io.github.komet0141.subclassCollector.CollectSubclass;
 import io.github.komet0141.subclassCollector.CollectionProcessor;
 
 public class SubclassLoader {
-    public static void load(String subpackageName) {
+    public static void load(String subpackageName, Object...args) {
         try {
-            Class.forName(fullClassName(subpackageName));
-        } catch (ClassNotFoundException e) {
+            Class.forName(fullClassName(subpackageName))
+                    .getMethod("load", Object[].class)
+                    .invoke(null, (Object) args);
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
-    public static void load(Class<?> clazz) {
+    public static void load(Class<?> clazz, Object...args) {
         String subpackageName;
         try {
             subpackageName = clazz.getAnnotation(CollectSubclass.OutputPackage.class).value();

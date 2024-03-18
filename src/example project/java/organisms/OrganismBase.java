@@ -7,7 +7,7 @@ import io.github.komet0141.subclassCollector.utils.InstanceHolder;
 public abstract class OrganismBase {
     public final static InstanceHolder<OrganismBase> INSTANCES = new InstanceHolder<>();
     @CollectSubclass.Initializer
-    public static void initialize(Class<? extends OrganismBase> clazz) {
+    public static void initialize(Class<? extends OrganismBase> clazz, Object[] args) {
         INSTANCES.put(clazz);
     }
 }
